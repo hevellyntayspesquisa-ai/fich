@@ -1,0 +1,48 @@
+:root {
+  --bg: #f7f4fb;
+  --card: #fff;
+  --text: #2b2240;
+  --muted: #6f6291;
+  --border: #e7e2f4;
+  --shadow: 0 8px 24px rgba(58,37,95,0.08);
+  --primary-500: #875fe0;
+  --primary-600: #6f4fc2;
+}
+
+body {
+  margin:0; font-family:'Inter',sans-serif;
+  background: radial-gradient(900px 420px at 80% 10%, #f2e9fb, var(--bg));
+  color:var(--text);
+}
+
+.app-header {padding:20px;text-align:center;}
+.app-header h1 {margin:0;color:var(--primary-600);}
+.subtitle {color:var(--muted);}
+.status-bar {margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--muted);}
+
+.app-container {display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px;max-width:1200px;margin:0 auto;}
+.panel {display:flex;flex-direction:column;gap:16px;}
+.card {background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;}
+.card h2 {margin:0 0 10px;color:var(--primary-600);}
+
+.form-grid {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-row {display:flex;flex-direction:column;gap:4px;}
+input,textarea,select {border:1px solid var(--border);border-radius:10px;padding:8px;font-size:0.95rem;}
+textarea{resize:vertical;width:100%;}
+
+.btn {border:none;border-radius:999px;padding:8px 14px;font-weight:600;background:#cbb3f5;color:var(--text);cursor:pointer;}
+.btn.primary {background:var(--primary-500);color:#fff;}
+.btn:hover {background:var(--primary-600);color:#fff;}
+
+.category-list {list-style:none;padding:0;margin:0;}
+.category-item {display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:12px;padding:6px;}
+
+.output-area,.ref-output,.txt-preview {border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff;}
+.output-category h4 {margin:0 0 8px;color:var(--primary-600);}
+.output-quote {margin-bottom:8px;}
+.placeholder {color:var(--muted);font-style:italic;}
+.app-footer {padding:12px;text-align:center;color:var(--muted);}
+
+.help-text {color:var(--muted);font-size:0.85rem;margin-top:8px;}
+
+@media(max-width:900px){.app-container{grid-template-columns:1fr;}.form-grid{grid-template-columns:1fr;}}

@@ -1,0 +1,404 @@
+// =========================
+// Referências aos elementos
+// =========================
+const statusBar       = document.getElementById('statusBar');
+const outputArea      = document.getElementById('outputArea');
+const refOutput       = document.getElementById('refOutput');
+const txtPreview      = document.getElementById('txtPreview');
+
+const pdfFileInput    = document.getElementById('pdfFileInput');
+const clearImportedBtn= document.getElementById('clearImportedBtn');
+
+const catNameInput    = document.getElementById('catName');
+const catColorSelect  = document.getElementById('catColor');
+const addCategoryBtn  = document.getElementById('addCategory');
+const categoryList    = document.getElementById('categoryList');
+
+const manualText      = document.getElementById('manualText');
+const processBtn      = document.getElementById('processBtn');
+const downloadTxtBtn  = document.getElementById('downloadTxtBtn');
+
+// Campos da referência
+function getRefData() {
+  return {
+    sobrenome: (document.getElementById('sobrenome').value || '').trim().toLowerCase(),
+    nome:      (document.getElementById('nome').value      || '').trim(),
+    autoresAdicionais: (document.getElementById('autoresAdicionais').value || '').trim(),
+    titulo:    (document.getElementById('titulo').value    || '').trim(),
+    local:     (document.getElementById('local').value     || '').trim(),
+    editora:   (document.getElementById('editora').value   || '').trim(),
+    ano:       (document.getElementById('ano').value       || '').trim(),
+    edicao:    (document.getElementById('edicao').value    || '').trim(),
+    paginas:   (document.getElementById('paginas').value   || '').trim(),
+    tipoDoc:   (document.getElementById('tipoDoc').value   || '').trim(),
+    url:       (document.getElementById('url').value       || '').trim(),
+    dataAcesso: (document.getElementById('dataAcesso').value || '').trim(),
+  };
+}
+
+// ===========================
+// Tabela cor → categoria
+// ===========================
+const categoriasPorCor = {}; // ex.: { verde: "conceitos importantes" }
+
+addCategoryBtn.addEventListener('click', () => {
+  const nome  = catNameInput.value.trim();
+  const cor   = catColorSelect.value;
+
+  if (!nome) {
+    status('Digite um nome de categoria antes de adicionar.');
+    return;
+  }
+
+  categoriasPorCor[cor] = nome;
+
+  // atualiza lista visual
+  renderCategoryList();
+  catNameInput.value = '';
+});
+
+function renderCategoryList() {
+  categoryList.innerHTML = '';
+  Object.entries(categoriasPorCor).forEach(([cor, nome]) => {
+    const li = document.createElement('li');
+    li.textContent = `${nome} – ${cor}`;
+    li.className = `cat-pill cat-${cor}`;
+    const btnX = document.createElement('button');
+    btnX.textContent = '×';
+    btnX.className = 'cat-remove';
+    btnX.addEventListener('click', () => {
+      delete categoriasPorCor[cor];
+      renderCategoryList();
+    });
+    li.appendChild(btnX);
+    categoryList.appendChild(li);
+  });
+}
+
+// ============================
+// Utilitários de status & txt
+// ============================
+function status(msg) {
+  if (statusBar) statusBar.textContent = msg;
+  console.log('[status]', msg);
+}
+
+// texto final para exportação
+let ultimoTxtExportavel = '';
+
+// ========================
+// Ambiente / PDF.js check
+// ========================
+(function checkEnv() {
+  const isFileProtocol = location.protocol === 'file:';
+  if (isFileProtocol) {
+    status('Aviso: abra o projeto em um servidor local (ex.: VS Code Live Server).');
+  }
+  if (typeof pdfjsLib === 'undefined') {
+    status('PDF.js não carregado. Verifique o script no HTML.');
+  }
+})();
+
+// ============================
+// Listeners principais
+// ============================
+pdfFileInput.addEventListener('change', handlePdfSelect);
+clearImportedBtn.addEventListener('click', () => {
+  outputArea.innerHTML = '<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>';
+  txtPreview.textContent = 'Conteúdo exportável aparecerá aqui.';
+  ultimoTxtExportavel = '';
+  status('Citações limpas.');
+});
+
+// Processo de texto manual com marcações [cor|p=19] ... [/end]
+processBtn.addEventListener('click', () => {
+  const texto = manualText.value;
+  if (!texto.trim()) {
+    status('Cole algum texto no campo “Texto manual”.');
+    return;
+  }
+  const ref = getRefData();
+  const citacoesPorCor = extrairCitacoesDeTextoManual(texto);
+  renderResultado(citacoesPorCor, ref);
+  status('Texto manual processado.');
+});
+
+// Download do .txt
+downloadTxtBtn.addEventListener('click', () => {
+  if (!ultimoTxtExportavel.trim()) {
+    status('Não há conteúdo para exportar.');
+    return;
+  }
+  const blob = new Blob([ultimoTxtExportavel], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'fichamento_abnt.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+// ==========================
+// 1) PDF → destaques por cor
+// ==========================
+async function handlePdfSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (typeof pdfjsLib === 'undefined') {
+    status('PDF.js não disponível. Verifique o HTML.');
+    return;
+  }
+
+  status(`Carregando PDF: ${file.name}…`);
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    await extrairDestaquesDoPdf(arrayBuffer);
+  } catch (err) {
+    console.error('Erro ao ler arquivo:', err);
+    status('Erro ao processar PDF (arquivo corrompido ou não suportado).');
+  }
+}
+
+// Função principal de extração de destaques
+async function extrairDestaquesDoPdf(arrayBuffer) {
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  status(`PDF carregado: ${pdf.numPages} páginas. Procurando destaques…`);
+
+  // Estrutura: { cor: [ { pagina, texto } ] }
+  const citacoesPorCor = {};
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+
+    // texto + anotações (highlights)
+    const [textContent, annotations] = await Promise.all([
+      page.getTextContent(),
+      page.getAnnotations({ intent: 'display' })
+    ]);
+
+    const itensTexto = mapTextItems(textContent);
+
+    // percorre anotações do tipo highlight / sublinhado etc.
+    for (const ann of annotations) {
+      const subtype = ann.subtype || ann.annotationType;
+      if (!subtype) continue;
+
+      // Consideramos HIGHLIGHT / UNDERLINE / SQUIGGLY / STRIKEOUT
+      const isHighlight =
+        subtype === 'Highlight' ||
+        subtype === 9 ||   // AnnotationType.HIGHLIGHT
+        subtype === 'Underline' ||
+        subtype === 10 ||
+        subtype === 'Squiggly' ||
+        subtype === 11 ||
+        subtype === 'StrikeOut' ||
+        subtype === 12;
+
+      if (!isHighlight) continue;
+
+      const caixas = getHighlightBoxes(ann);
+      if (!caixas.length) continue;
+
+      const corNome = mapRgbToCorNome(ann.color);
+
+      const partes = [];
+      for (const item of itensTexto) {
+        const { x, y } = item;
+        if (caixas.some(caixa => pontoDentroDaCaixa(x, y, caixa))) {
+          partes.push(item.str);
+        }
+      }
+
+      let textoDestacado = partes.join(' ').replace(/\s+/g, ' ').trim();
+      if (!textoDestacado) continue;
+
+      adicionarCitacao(citacoesPorCor, corNome, {
+        pagina: pageNum,
+        texto: textoDestacado
+      });
+    }
+  }
+
+  const ref = getRefData();
+  renderResultado(citacoesPorCor, ref);
+  status('Extração de destaques concluída.');
+}
+
+// Converte itens de texto em {str, x, y}
+function mapTextItems(textContent) {
+  return textContent.items.map(it => {
+    const [a, b, c, d, e, f] = it.transform;
+    // e,f = posição aproximada do texto
+    return { str: it.str, x: e, y: f };
+  });
+}
+
+// Pega caixas (bounding boxes) dos quadPoints do highlight
+function getHighlightBoxes(annotation) {
+  const boxes = [];
+  const quads = annotation.quadPoints || annotation.quadrilaterals;
+  if (!quads || !quads.length) return boxes;
+
+  for (let i = 0; i < quads.length; i += 8) {
+    const xs = [quads[i], quads[i + 2], quads[i + 4], quads[i + 6]];
+    const ys = [quads[i + 1], quads[i + 3], quads[i + 5], quads[i + 7]];
+    boxes.push({
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: Math.min(...ys),
+      maxY: Math.max(...ys),
+    });
+  }
+  return boxes;
+}
+
+function pontoDentroDaCaixa(x, y, caixa) {
+  return (
+    x >= caixa.minX &&
+    x <= caixa.maxX &&
+    y >= caixa.minY &&
+    y <= caixa.maxY
+  );
+}
+
+// =============================
+// 2) Texto manual com sintaxe:
+// [verde|p=19] trecho [/end]
+// =============================
+function extrairCitacoesDeTextoManual(texto) {
+  const mapa = {};
+  const regex = /\[([a-zA-ZçÇáéíóúãõâêô]+)\|p=(\d+)\]([\s\S]*?)\[\/end\]/g;
+  let m;
+  while ((m = regex.exec(texto)) !== null) {
+    const cor   = m[1].toLowerCase();
+    const pag   = parseInt(m[2], 10);
+    const trecho= m[3].replace(/\s+/g, ' ').trim();
+    if (!trecho) continue;
+
+    adicionarCitacao(mapa, cor, { pagina: pag, texto: trecho });
+  }
+  return mapa;
+}
+
+// ===============================
+// 3) Organização e formatação ABNT
+// ===============================
+function adicionarCitacao(mapa, cor, cit) {
+  if (!mapa[cor]) mapa[cor] = [];
+  mapa[cor].push(cit);
+}
+
+function mapRgbToCorNome(rgb) {
+  // rgb geralmente no formato [r,g,b] com valores 0-1
+  if (!rgb || rgb.length < 3) return 'amarelo'; // fallback
+
+  let [r, g, b] = rgb;
+  // alguns PDFs trazem 0-255, normalizamos se for o caso
+  if (r > 1 || g > 1 || b > 1) {
+    r /= 255; g /= 255; b /= 255;
+  }
+
+  if (r > 0.8 && g > 0.8 && b < 0.4) return 'amarelo';
+  if (r > 0.8 && g < 0.4 && b < 0.4) return 'vermelho';
+  if (g > 0.6 && r < 0.4 && b < 0.4) return 'verde';
+  if (b > 0.6 && r < 0.4 && g < 0.4) return 'azul';
+  if (r > 0.6 && b > 0.6 && g < 0.4) return 'roxo';
+  if (r > 0.9 && g > 0.5 && b > 0.7) return 'rosa';
+  if (r > 0.9 && g > 0.6 && b < 0.3) return 'laranja';
+
+  return 'amarelo'; // padrão
+}
+
+// monta citação direta: texto + (autor, ano, p. x)
+function montarCitacaoABNT(trecho, pagina, ref) {
+  const autor = ref.sobrenome
+    ? ref.sobrenome
+    : 'autor';
+  const ano   = ref.ano || 's.d.';
+
+  const p = pagina ? `, p. ${pagina}` : '';
+  return `${trecho} (${autor}, ${ano}${p}).`;
+}
+
+// monta referência final simples (livro)
+function montarReferenciaABNT(ref) {
+  if (!ref.sobrenome && !ref.titulo) {
+    return 'Preencha os dados da referência para gerar no padrão ABNT.';
+  }
+
+  const partes = [];
+  if (ref.sobrenome) {
+    partes.push(`${ref.sobrenome}, ${ref.nome}`);
+  }
+  if (ref.titulo) {
+    partes.push(`${ref.titulo}.`);
+  }
+  const localEditoraAno = [];
+  if (ref.local)   localEditoraAno.push(ref.local);
+  if (ref.editora) localEditoraAno.push(ref.editora);
+  if (ref.ano)     localEditoraAno.push(ref.ano);
+
+  if (localEditoraAno.length) {
+    partes.push(localEditoraAno.join(': ').replace(': ', ': ') + '.');
+  }
+
+  if (ref.url) {
+    partes.push(ref.url);
+  }
+  if (ref.dataAcesso) {
+    partes.push(`Acesso em: ${ref.dataAcesso}.`);
+  }
+
+  return partes.join(' ');
+}
+
+// Renderiza tudo no painel direito + txt de exportação
+function renderResultado(citacoesPorCor, ref) {
+  const ordemCores = ['vermelho', 'azul', 'verde', 'roxo', 'laranja', 'rosa', 'amarelo'];
+
+  let htmlSaida = '';
+  let linhasTxt = [];
+
+  ordemCores.forEach(cor => {
+    const lista = citacoesPorCor[cor];
+    if (!lista || !lista.length) return;
+
+    const nomeCategoria = categoriasPorCor[cor] || cor;
+
+    htmlSaida += `<h3>${nomeCategoria} – ${cor}</h3>`;
+    linhasTxt.push(`${nomeCategoria} – ${cor}`);
+
+    lista.forEach(cit => {
+      const citacao = montarCitacaoABNT(cit.texto, cit.pagina, ref);
+      htmlSaida += `<p>${citacao}</p>`;
+      linhasTxt.push(citacao);
+      linhasTxt.push(''); // linha em branco entre citações
+    });
+
+    htmlSaida += '<hr />';
+    linhasTxt.push(''); // separação entre categorias
+  });
+
+  if (!htmlSaida) {
+    htmlSaida = '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui destaques/annotations ou use o texto manual.</p>';
+    linhasTxt  = ['Nenhuma citação encontrada.'];
+  }
+
+  outputArea.innerHTML = htmlSaida;
+
+  const referenciaFinal = montarReferenciaABNT(ref);
+  refOutput.textContent = referenciaFinal;
+
+  linhasTxt.push(''); 
+  linhasTxt.push('Referência:');
+  linhasTxt.push(referenciaFinal);
+
+  ultimoTxtExportavel = linhasTxt.join('\n');
+  txtPreview.textContent = ultimoTxtExportavel;
+}
