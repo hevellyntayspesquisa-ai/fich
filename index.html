@@ -99,10 +99,11 @@
     <p>Ferramenta de fichamento acadêmico • Roxo pastel • ABNT</p>
   </footer>
 
-  <!-- ⚠️ PDF.js LOCAL (opção 1 que você escolheu) -->
-  <script src="pdf.js"></script>
+  <!-- PDF.js compacto da CDN (única versão usada) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.min.js"></script>
   <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.worker.min.js";
   </script>
 
   <!-- Seu script principal -->
@@ -110,22 +111,3 @@
 
 </body>
 </html>
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8" />
-    <title>Seu App</title>
-
-    <!-- Aqui -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.2.146/pdf.min.js"></script>
-    <script>
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.2.146/pdf.worker.min.js";
-    </script>
-</head>
-
-<body>
-    <!-- resto do seu código -->
-</body>
-</html>
-
