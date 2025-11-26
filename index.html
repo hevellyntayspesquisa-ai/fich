@@ -99,15 +99,19 @@
     <p>Ferramenta de fichamento acadêmico • Roxo pastel • ABNT</p>
   </footer>
 
-  <!-- PDF.js compacto da CDN (única versão usada) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.min.js"></script>
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.worker.min.js";
+  <!-- 🟣 PDF.js COMPACTO (CDN) — usando DEFER -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.min.js"></script>
+  <script defer>
+    document.addEventListener("DOMContentLoaded", () => {
+      if (typeof pdfjsLib !== "undefined") {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.worker.min.js";
+      }
+    });
   </script>
 
-  <!-- Seu script principal -->
-  <script src="script.js"></script>
+  <!-- 🟣 Seu script -->
+  <script defer src="script.js"></script>
 
 </body>
 </html>
