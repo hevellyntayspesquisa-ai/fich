@@ -18,43 +18,38 @@ const catColorSelect   = document.getElementById('catColor');
 const addCategoryBtn   = document.getElementById('addCategory');
 const categoryList     = document.getElementById('categoryList');
 
-const downloadTxtBtn   = document.getElementById('downloadTxtBtn');
-
-// Opcional: só se o HTML ainda tiver texto manual
 const manualText       = document.getElementById('manualText');
 const processBtn       = document.getElementById('processBtn');
+const downloadTxtBtn   = document.getElementById('downloadTxtBtn');
 
 // --------------------------
 // Dados da referência (ABNT)
 // --------------------------
 function getRefData() {
   return {
-    sobrenome: (document.getElementById('sobrenome')?.value || '')
-      .trim()
-      .toLowerCase(),
-    nome: (document.getElementById('nome')?.value || '').trim(),
-    autoresAdicionais: (document.getElementById('autoresAdicionais')?.value || '').trim(),
-    titulo: (document.getElementById('titulo')?.value || '').trim(),
-    local: (document.getElementById('local')?.value || '').trim(),
-    editora: (document.getElementById('editora')?.value || '').trim(),
-    ano: (document.getElementById('ano')?.value || '').trim(),
-    edicao: (document.getElementById('edicao')?.value || '').trim(),
-    paginas: (document.getElementById('paginas')?.value || '').trim(),
-    tipoDoc: (document.getElementById('tipoDoc')?.value || '').trim(),
-    url: (document.getElementById('url')?.value || '').trim(),
-    dataAcesso: (document.getElementById('dataAcesso')?.value || '').trim(),
+    sobrenome: (document.getElementById('sobrenome').value || '').trim().toLowerCase(),
+    nome: (document.getElementById('nome').value || '').trim(),
+    autoresAdicionais: (document.getElementById('autoresAdicionais').value || '').trim(),
+    titulo: (document.getElementById('titulo').value || '').trim(),
+    local: (document.getElementById('local').value || '').trim(),
+    editora: (document.getElementById('editora').value || '').trim(),
+    ano: (document.getElementById('ano').value || '').trim(),
+    edicao: (document.getElementById('edicao').value || '').trim(),
+    paginas: (document.getElementById('paginas').value || '').trim(),
+    tipoDoc: (document.getElementById('tipoDoc').value || '').trim(),
+    url: (document.getElementById('url').value || '').trim(),
+    dataAcesso: (document.getElementById('dataAcesso').value || '').trim(),
   };
 }
 
 // --------------------------------
 // Tabela de cores → categorias
 // --------------------------------
-// Exemplo: { verde: "conceitos importantes" }
-const categoriasPorCor = {};
+const categoriasPorCor = {}; // ex.: { verde: "conceitos importantes" }
 
 addCategoryBtn.addEventListener('click', () => {
   const nome = catNameInput.value.trim();
-  const cor  = catColorSelect.value;
+  const cor = catColorSelect.value;
 
   if (!nome) {
     status('Digite um nome de categoria antes de adicionar.');
@@ -68,7 +63,6 @@ addCategoryBtn.addEventListener('click', () => {
 
 function renderCategoryList() {
   categoryList.innerHTML = '';
-
   Object.entries(categoriasPorCor).forEach(([cor, nome]) => {
     const li = document.createElement('li');
     li.textContent = `${nome} – ${cor}`;
@@ -102,7 +96,7 @@ function status(msg) {
   if (typeof pdfjsLib === 'undefined') {
     status('PDF.js não carregado. Verifique a conexão com a internet.');
   } else {
-    status('Aguardando arquivo…');
+    status('Aguardando arquivo ou texto…');
   }
 })();
 
@@ -125,7 +119,6 @@ if (clearImportedBtn) {
   });
 }
 
-// Opcional: processar texto manual se existir no HTML
 if (processBtn && manualText) {
   processBtn.addEventListener('click', () => {
     const texto = manualText.value;
@@ -146,19 +139,16 @@ if (downloadTxtBtn) {
       status('Não há conteúdo para exportar.');
       return;
     }
-
     const blob = new Blob([ultimoTxtExportavel], {
       type: 'text/plain;charset=utf-8',
     });
     const url = URL.createObjectURL(blob);
-
     const a = document.createElement('a');
     a.href = url;
     a.download = 'fichamento_abnt.txt';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
     URL.revokeObjectURL(url);
   });
 }
@@ -167,7 +157,7 @@ if (downloadTxtBtn) {
 // 1) Leitura do PDF e das anotações
 // =====================================
 async function handlePdfSelect(e) {
-  const file = e.target.files?.[0];
+  const file = e.target.files && e.target.files[0];
   if (!file) return;
 
   if (typeof pdfjsLib === 'undefined') {
@@ -199,7 +189,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
     status(`Processando página ${pageNum} de ${totalPaginas}…`);
 
     const page = await pdf.getPage(pageNum);
-
     const [textContent, annotations] = await Promise.all([
       page.getTextContent(),
       page.getAnnotations({ intent: 'display' }),
@@ -211,7 +200,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       const subtype = ann.subtype || ann.annotationType;
       if (!subtype) continue;
 
-      // tipos de anotação considerados como "destaque"
       const isHighlight =
         subtype === 'Highlight' ||
         subtype === 9 ||
@@ -227,7 +215,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       const caixas = getHighlightBoxes(ann);
       if (!caixas.length) continue;
 
-      // COR DA ANOTAÇÃO (RGB → nome da cor)
       const corNome = mapRgbToCorNome(ann.color);
 
       const partes = [];
@@ -239,7 +226,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
 
       let textoDestacado = partes.join(' ').replace(/\s+/g, ' ').trim();
 
-      // Se não achou pelo posicionamento, tenta o conteúdo da anotação
       if (!textoDestacado && ann.contents) {
         textoDestacado = String(ann.contents).replace(/\s+/g, ' ').trim();
       }
@@ -271,13 +257,10 @@ function intervaloSobrepoe(minA, maxA, minB, maxB, margem = 0) {
 function mapTextItems(textContent) {
   return textContent.items.map((it) => {
     const tr = it.transform || it.textMatrix || [1, 0, 0, 1, 0, 0];
-    const x = tr[4] || 0; // posição X
-    const y = tr[5] || 0; // posição Y
+    const x = tr[4] || 0;
+    const y = tr[5] || 0;
 
-    // Altura aproximada da fonte (módulo do vetor vertical)
     const fontHeight = Math.sqrt((tr[1] || 0) ** 2 + (tr[3] || 0) ** 2) || 1;
-
-    // Largura aproximada do texto
     const width =
       it.width || (it.str && it.str.length ? it.str.length * fontHeight * 0.5 : fontHeight);
     const height = fontHeight;
@@ -344,64 +327,81 @@ function adicionarCitacao(mapa, cor, cit) {
   mapa[cor].push(cit);
 }
 
-// Converte RGB da anotação em nome de cor (todas básicas)
+// ---------- RGB → HSV & cor básica ----------
+
+function rgbToHsv(r, g, b) {
+  let max = Math.max(r, g, b);
+  let min = Math.min(r, g, b);
+  let h, s, v = max;
+
+  let d = max - min;
+  s = max === 0 ? 0 : d / max;
+
+  if (d === 0) {
+    h = 0;
+  } else {
+    switch (max) {
+      case r:
+        h = ((g - b) / d) % 6;
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+
+  return { h, s, v };
+}
+
+// Converte RGB da anotação em nome de cor básica usando HSV
 function mapRgbToCorNome(rgb) {
   if (!rgb || rgb.length < 3) return 'amarelo';
 
   let [r, g, b] = rgb;
 
-  // alguns PDFs usam 0–255
+  // Alguns PDFs usam 0–255
   if (r > 1 || g > 1 || b > 1) {
     r /= 255;
     g /= 255;
     b /= 255;
   }
 
-  // Amarelo
-  if (r > 0.8 && g > 0.8 && b < 0.4) return 'amarelo';
+  const { h, s, v } = rgbToHsv(r, g, b);
 
-  // Vermelho
-  if (r > 0.8 && g < 0.4 && b < 0.4) return 'vermelho';
-
-  // Verde
-  if (g > 0.6 && r < 0.4 && b < 0.4) return 'verde';
-
-  // Azul
-  if (b > 0.6 && r < 0.4 && g < 0.4) return 'azul';
-
-  // Ciano (azul esverdeado)
-  if (g > 0.6 && b > 0.6 && r < 0.4) return 'ciano';
-
-  // Magenta / Rosa forte
-  if (r > 0.8 && b > 0.7 && g < 0.5) return 'rosa';
-
-  // Roxo (mistura de vermelho e azul)
-  if (r > 0.6 && b > 0.6 && g < 0.4) return 'roxo';
-
-  // Laranja
-  if (r > 0.9 && g > 0.5 && g < 0.8 && b < 0.3) return 'laranja';
-
-  // Cinza
-  const difRG = Math.abs(r - g);
-  const difGB = Math.abs(g - b);
-  const difBR = Math.abs(b - r);
-  if (difRG < 0.1 && difGB < 0.1 && difBR < 0.1 && r > 0.2 && r < 0.8) {
+  // baixa saturação → tons de cinza
+  if (s < 0.15) {
+    if (v < 0.25) return 'preto';
+    if (v > 0.85) return 'branco';
     return 'cinza';
   }
 
-  // padrão
+  // H em graus 0–360
+  if ((h >= 0 && h < 15) || (h >= 345 && h <= 360)) return 'vermelho';
+  if (h >= 15 && h < 45) return 'laranja';
+  if (h >= 45 && h < 70) return 'amarelo';
+  if (h >= 70 && h < 150) return 'verde';
+  if (h >= 150 && h < 210) return 'ciano';
+  if (h >= 210 && h < 255) return 'azul';
+  if (h >= 255 && h < 290) return 'roxo';
+  if (h >= 290 && h < 345) return 'rosa';
+
   return 'amarelo';
 }
 
-// Monta citação direta: texto (autor, ano, p. x).
+// ---------- ABNT ----------
+
 function montarCitacaoABNT(trecho, pagina, ref) {
   const autor = ref.sobrenome || 'autor';
-  const ano   = ref.ano || 's.d.';
-  const p     = pagina ? `, p. ${pagina}` : '';
+  const ano = ref.ano || 's.d.';
+  const p = pagina ? `, p. ${pagina}` : '';
   return `${trecho} (${autor}, ${ano}${p}).`;
 }
 
-// Monta referência única da obra
 function montarReferenciaABNT(ref) {
   if (!ref.sobrenome && !ref.titulo) {
     return 'Preencha pelo menos sobrenome e título para gerar a referência.';
@@ -419,9 +419,9 @@ function montarReferenciaABNT(ref) {
   }
 
   const localEditoraAno = [];
-  if (ref.local)   localEditoraAno.push(ref.local);
+  if (ref.local) localEditoraAno.push(ref.local);
   if (ref.editora) localEditoraAno.push(ref.editora);
-  if (ref.ano)     localEditoraAno.push(ref.ano);
+  if (ref.ano) localEditoraAno.push(ref.ano);
 
   if (localEditoraAno.length) {
     partes.push(localEditoraAno.join(': ') + '.');
@@ -437,19 +437,21 @@ function montarReferenciaABNT(ref) {
   return partes.join(' ');
 }
 
-// Renderiza na interface e prepara o .txt
+// ---------- Render na interface ----------
+
 function renderResultado(citacoesPorCor, ref) {
-  // inclui as cores básicas + cinza
   const ordemCores = [
     'vermelho',
-    'azul',
-    'verde',
-    'amarelo',
     'laranja',
-    'rosa',
-    'roxo',
+    'amarelo',
+    'verde',
     'ciano',
+    'azul',
+    'roxo',
+    'rosa',
     'cinza',
+    'preto',
+    'branco',
   ];
 
   let htmlSaida = '';
@@ -477,7 +479,7 @@ function renderResultado(citacoesPorCor, ref) {
 
   if (!htmlSaida) {
     htmlSaida =
-      '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui texto selecionável e destaques como anotações (marca-texto), não apenas imagem.</p>';
+      '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui texto selecionável e destaques como anotações (marca-texto), não apenas imagem escaneada.</p>';
     linhasTxt = ['Nenhuma citação encontrada.'];
   }
 
