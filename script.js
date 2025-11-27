@@ -1,8 +1,5 @@
 // ======================================
 //  FICHAMENTO ABNT – SCRIPT PRINCIPAL
-//  - Lê PDF com anotações
-//  - Identifica cor do destaque
-//  - Gera citações ABNT e referência
 // ======================================
 
 // -------------------------
@@ -23,25 +20,29 @@ const categoryList     = document.getElementById('categoryList');
 
 const downloadTxtBtn   = document.getElementById('downloadTxtBtn');
 
+// Opcional: só se o HTML ainda tiver texto manual
+const manualText       = document.getElementById('manualText');
+const processBtn       = document.getElementById('processBtn');
+
 // --------------------------
 // Dados da referência (ABNT)
 // --------------------------
 function getRefData() {
   return {
-    sobrenome: (document.getElementById('sobrenome').value || '')
+    sobrenome: (document.getElementById('sobrenome')?.value || '')
       .trim()
       .toLowerCase(),
-    nome: (document.getElementById('nome').value || '').trim(),
-    autoresAdicionais: (document.getElementById('autoresAdicionais').value || '').trim(),
-    titulo: (document.getElementById('titulo').value || '').trim(),
-    local: (document.getElementById('local').value || '').trim(),
-    editora: (document.getElementById('editora').value || '').trim(),
-    ano: (document.getElementById('ano').value || '').trim(),
-    edicao: (document.getElementById('edicao').value || '').trim(),
-    paginas: (document.getElementById('paginas').value || '').trim(),
-    tipoDoc: (document.getElementById('tipoDoc').value || '').trim(),
-    url: (document.getElementById('url').value || '').trim(),
-    dataAcesso: (document.getElementById('dataAcesso').value || '').trim(),
+    nome: (document.getElementById('nome')?.value || '').trim(),
+    autoresAdicionais: (document.getElementById('autoresAdicionais')?.value || '').trim(),
+    titulo: (document.getElementById('titulo')?.value || '').trim(),
+    local: (document.getElementById('local')?.value || '').trim(),
+    editora: (document.getElementById('editora')?.value || '').trim(),
+    ano: (document.getElementById('ano')?.value || '').trim(),
+    edicao: (document.getElementById('edicao')?.value || '').trim(),
+    paginas: (document.getElementById('paginas')?.value || '').trim(),
+    tipoDoc: (document.getElementById('tipoDoc')?.value || '').trim(),
+    url: (document.getElementById('url')?.value || '').trim(),
+    dataAcesso: (document.getElementById('dataAcesso')?.value || '').trim(),
   };
 }
 
@@ -51,7 +52,6 @@ function getRefData() {
 // Exemplo: { verde: "conceitos importantes" }
 const categoriasPorCor = {};
 
-// Adiciona / remove categorias
 addCategoryBtn.addEventListener('click', () => {
   const nome = catNameInput.value.trim();
   const cor  = catColorSelect.value;
@@ -109,38 +109,59 @@ function status(msg) {
 // ---------------------------
 // Listeners principais da UI
 // ---------------------------
-pdfFileInput.addEventListener('change', handlePdfSelect);
+if (pdfFileInput) {
+  pdfFileInput.addEventListener('change', handlePdfSelect);
+}
 
-clearImportedBtn.addEventListener('click', () => {
-  outputArea.innerHTML =
-    '<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>';
-  refOutput.innerHTML =
-    '<p class="placeholder">Preencha os dados para gerar no padrão ABNT.</p>';
-  txtPreview.textContent = 'Conteúdo exportável aparecerá aqui.';
-  ultimoTxtExportavel = '';
-  status('Citações limpas.');
-});
-
-downloadTxtBtn.addEventListener('click', () => {
-  if (!ultimoTxtExportavel.trim()) {
-    status('Não há conteúdo para exportar.');
-    return;
-  }
-
-  const blob = new Blob([ultimoTxtExportavel], {
-    type: 'text/plain;charset=utf-8',
+if (clearImportedBtn) {
+  clearImportedBtn.addEventListener('click', () => {
+    outputArea.innerHTML =
+      '<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>';
+    refOutput.innerHTML =
+      '<p class="placeholder">Preencha os dados para gerar no padrão ABNT.</p>';
+    txtPreview.textContent = 'Conteúdo exportável aparecerá aqui.';
+    ultimoTxtExportavel = '';
+    status('Citações limpas.');
   });
-  const url = URL.createObjectURL(blob);
+}
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'fichamento_abnt.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+// Opcional: processar texto manual se existir no HTML
+if (processBtn && manualText) {
+  processBtn.addEventListener('click', () => {
+    const texto = manualText.value;
+    if (!texto.trim()) {
+      status('Cole algum texto no campo “Texto manual”.');
+      return;
+    }
+    const ref = getRefData();
+    const citacoesPorCor = extrairCitacoesDeTextoManual(texto);
+    renderResultado(citacoesPorCor, ref);
+    status('Texto manual processado.');
+  });
+}
 
-  URL.revokeObjectURL(url);
-});
+if (downloadTxtBtn) {
+  downloadTxtBtn.addEventListener('click', () => {
+    if (!ultimoTxtExportavel.trim()) {
+      status('Não há conteúdo para exportar.');
+      return;
+    }
+
+    const blob = new Blob([ultimoTxtExportavel], {
+      type: 'text/plain;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fichamento_abnt.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+  });
+}
 
 // =====================================
 // 1) Leitura do PDF e das anotações
@@ -206,13 +227,12 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       const caixas = getHighlightBoxes(ann);
       if (!caixas.length) continue;
 
-      // COR DA ANOTAÇÃO
+      // COR DA ANOTAÇÃO (RGB → nome da cor)
       const corNome = mapRgbToCorNome(ann.color);
 
       const partes = [];
       for (const item of itensTexto) {
-        const { x, y } = item;
-        if (caixas.some((caixa) => pontoDentroDaCaixa(x, y, caixa))) {
+        if (caixas.some((caixa) => textoDentroDaCaixa(item, caixa))) {
           partes.push(item.str);
         }
       }
@@ -238,17 +258,41 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
   status('Processamento concluído.');
 }
 
-// Mapeia itens de texto em {str, x, y}
+// ==========================================
+//  FUNÇÕES MATEMÁTICAS DE INTERVALO / ÁREA
+// ==========================================
+
+// Verifica se dois intervalos [minA, maxA] e [minB, maxB] se sobrepõem
+function intervaloSobrepoe(minA, maxA, minB, maxB, margem = 0) {
+  return Math.max(minA, minB) - margem <= Math.min(maxA, maxB) + margem;
+}
+
+// Converte itens de texto em retângulos aproximados {str, xMin, xMax, yMin, yMax}
 function mapTextItems(textContent) {
   return textContent.items.map((it) => {
-    const transform = it.transform || it.textMatrix || [1, 0, 0, 1, 0, 0];
-    const e = transform[4] || 0;
-    const f = transform[5] || 0;
-    return { str: it.str, x: e, y: f };
+    const tr = it.transform || it.textMatrix || [1, 0, 0, 1, 0, 0];
+    const x = tr[4] || 0; // posição X
+    const y = tr[5] || 0; // posição Y
+
+    // Altura aproximada da fonte (módulo do vetor vertical)
+    const fontHeight = Math.sqrt((tr[1] || 0) ** 2 + (tr[3] || 0) ** 2) || 1;
+
+    // Largura aproximada do texto
+    const width =
+      it.width || (it.str && it.str.length ? it.str.length * fontHeight * 0.5 : fontHeight);
+    const height = fontHeight;
+
+    return {
+      str: it.str,
+      xMin: x,
+      xMax: x + width,
+      yMin: y,
+      yMax: y + height,
+    };
   });
 }
 
-// Constrói caixas (bounding boxes) a partir de quadPoints
+// Constrói caixas (bounding boxes) a partir de quadPoints do highlight
 function getHighlightBoxes(annotation) {
   const boxes = [];
   const quads = annotation.quadPoints || annotation.quadrilaterals;
@@ -268,24 +312,39 @@ function getHighlightBoxes(annotation) {
   return boxes;
 }
 
-function pontoDentroDaCaixa(x, y, caixa) {
-  return (
-    x >= caixa.minX &&
-    x <= caixa.maxX &&
-    y >= caixa.minY &&
-    y <= caixa.maxY
-  );
+// Verifica se o retângulo do texto e o retângulo do highlight se sobrepõem
+function textoDentroDaCaixa(item, caixa) {
+  const xOverlap = intervaloSobrepoe(item.xMin, item.xMax, caixa.minX, caixa.maxX, 1);
+  const yOverlap = intervaloSobrepoe(item.yMin, item.yMax, caixa.minY, caixa.maxY, 1);
+  return xOverlap && yOverlap;
 }
 
 // =======================================
-// 2) Organização por cor + ABNT
+// 2) Texto manual com cores (opcional)
+// =======================================
+function extrairCitacoesDeTextoManual(texto) {
+  const mapa = {};
+  const regex = /\[([a-zA-ZáéíóúãõâêôçÇ]+)\|p=(\d+)\]([\s\S]*?)\[\/end\]/g;
+  let m;
+  while ((m = regex.exec(texto)) !== null) {
+    const cor = m[1].toLowerCase();
+    const pagina = parseInt(m[2], 10);
+    const trecho = m[3].replace(/\s+/g, ' ').trim();
+    if (!trecho) continue;
+    adicionarCitacao(mapa, cor, { pagina, texto: trecho });
+  }
+  return mapa;
+}
+
+// =======================================
+// 3) Organização por cor + ABNT
 // =======================================
 function adicionarCitacao(mapa, cor, cit) {
   if (!mapa[cor]) mapa[cor] = [];
   mapa[cor].push(cit);
 }
 
-// Converte RGB da anotação em nome de cor
+// Converte RGB da anotação em nome de cor (todas básicas)
 function mapRgbToCorNome(rgb) {
   if (!rgb || rgb.length < 3) return 'amarelo';
 
@@ -298,13 +357,37 @@ function mapRgbToCorNome(rgb) {
     b /= 255;
   }
 
+  // Amarelo
   if (r > 0.8 && g > 0.8 && b < 0.4) return 'amarelo';
+
+  // Vermelho
   if (r > 0.8 && g < 0.4 && b < 0.4) return 'vermelho';
+
+  // Verde
   if (g > 0.6 && r < 0.4 && b < 0.4) return 'verde';
+
+  // Azul
   if (b > 0.6 && r < 0.4 && g < 0.4) return 'azul';
+
+  // Ciano (azul esverdeado)
+  if (g > 0.6 && b > 0.6 && r < 0.4) return 'ciano';
+
+  // Magenta / Rosa forte
+  if (r > 0.8 && b > 0.7 && g < 0.5) return 'rosa';
+
+  // Roxo (mistura de vermelho e azul)
   if (r > 0.6 && b > 0.6 && g < 0.4) return 'roxo';
-  if (r > 0.9 && g > 0.5 && b > 0.7) return 'rosa';
-  if (r > 0.9 && g > 0.6 && b < 0.3) return 'laranja';
+
+  // Laranja
+  if (r > 0.9 && g > 0.5 && g < 0.8 && b < 0.3) return 'laranja';
+
+  // Cinza
+  const difRG = Math.abs(r - g);
+  const difGB = Math.abs(g - b);
+  const difBR = Math.abs(b - r);
+  if (difRG < 0.1 && difGB < 0.1 && difBR < 0.1 && r > 0.2 && r < 0.8) {
+    return 'cinza';
+  }
 
   // padrão
   return 'amarelo';
@@ -356,7 +439,18 @@ function montarReferenciaABNT(ref) {
 
 // Renderiza na interface e prepara o .txt
 function renderResultado(citacoesPorCor, ref) {
-  const ordemCores = ['vermelho', 'azul', 'verde', 'roxo', 'laranja', 'rosa', 'amarelo'];
+  // inclui as cores básicas + cinza
+  const ordemCores = [
+    'vermelho',
+    'azul',
+    'verde',
+    'amarelo',
+    'laranja',
+    'rosa',
+    'roxo',
+    'ciano',
+    'cinza',
+  ];
 
   let htmlSaida = '';
   let linhasTxt = [];
@@ -383,7 +477,7 @@ function renderResultado(citacoesPorCor, ref) {
 
   if (!htmlSaida) {
     htmlSaida =
-      '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui texto selecionável e destaques do tipo anotação (highlight/sublinhar), não apenas imagem.</p>';
+      '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui texto selecionável e destaques como anotações (marca-texto), não apenas imagem.</p>';
     linhasTxt = ['Nenhuma citação encontrada.'];
   }
 
