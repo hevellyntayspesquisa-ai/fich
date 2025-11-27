@@ -104,8 +104,8 @@ function status(msg) {
 pdfFileInput.addEventListener('change', handlePdfSelect);
 
 clearImportedBtn.addEventListener('click', () => {
-  outputArea.innerHTML = '<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>';
-  refOutput.innerHTML  = '<p class="placeholder">Preencha os dados para gerar no padrão ABNT.</p>';
+  outputArea.innerHTML = `<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>`;
+  refOutput.innerHTML  = `<p class="placeholder">Preencha os dados para gerar no padrão ABNT.</p>`;
   txtPreview.textContent = 'Conteúdo exportável aparecerá aqui.';
   ultimoTxtExportavel = '';
   status('Citações limpas.');
