@@ -2,76 +2,132 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fichamento ABNT Automatizado</title>
 
   <!-- Fonte -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
   <!-- CSS -->
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="app-header">
     <h1>Fichamento ABNT Automatizado</h1>
-    <p class="subtitle">Detecta marcações coloridas • Agrupa por categorias • Formata NBR 10520 e NBR 6023</p>
+    <p class="subtitle">
+      Detecta marcações coloridas &middot; Agrupa por categorias &middot; NBR 10520 &amp; NBR 6023
+    </p>
     <div id="statusBar" class="status-bar">Aguardando arquivo ou texto…</div>
   </header>
 
   <main class="app-container">
     <!-- Painel Esquerdo -->
     <section class="panel panel-left">
+      <!-- Dados da referência -->
       <div class="card">
         <h2>Dados da referência</h2>
-        <form id="refForm" class="form-grid">
-          <div class="form-row"><label>Sobrenome</label><input id="sobrenome" type="text"></div>
-          <div class="form-row"><label>Nome completo</label><input id="nome" type="text"></div>
-          <div class="form-row"><label>Autores adicionais</label><input id="autoresAdicionais" type="text"></div>
-          <div class="form-row"><label>Título</label><input id="titulo" type="text"></div>
-          <div class="form-row"><label>Local</label><input id="local" type="text"></div>
-          <div class="form-row"><label>Editora</label><input id="editora" type="text"></div>
-          <div class="form-row"><label>Ano</label><input id="ano" type="text"></div>
-          <div class="form-row"><label>Edição</label><input id="edicao" type="text"></div>
-          <div class="form-row"><label>Páginas</label><input id="paginas" type="text"></div>
-          <div class="form-row"><label>Tipo de documento</label><input id="tipoDoc" type="text"></div>
-          <div class="form-row"><label>URL</label><input id="url" type="url"></div>
-          <div class="form-row"><label>Data de acesso</label><input id="dataAcesso" type="date"></div>
+        <form id="refForm" class="form-grid" onsubmit="return false;">
+          <div class="form-row">
+            <label for="sobrenome">Sobrenome</label>
+            <input id="sobrenome" type="text" placeholder="kastrup" />
+          </div>
+          <div class="form-row">
+            <label for="nome">Nome completo</label>
+            <input id="nome" type="text" placeholder="Virgínia" />
+          </div>
+          <div class="form-row">
+            <label for="autoresAdicionais">Autores adicionais</label>
+            <input id="autoresAdicionais" type="text" placeholder="(opcional)" />
+          </div>
+          <div class="form-row">
+            <label for="titulo">Título</label>
+            <input id="titulo" type="text" placeholder="A invenção de si e do mundo" />
+          </div>
+          <div class="form-row">
+            <label for="local">Local</label>
+            <input id="local" type="text" placeholder="Belo Horizonte" />
+          </div>
+          <div class="form-row">
+            <label for="editora">Editora</label>
+            <input id="editora" type="text" placeholder="Autêntica" />
+          </div>
+          <div class="form-row">
+            <label for="ano">Ano</label>
+            <input id="ano" type="text" placeholder="2007" />
+          </div>
+          <div class="form-row">
+            <label for="edicao">Edição</label>
+            <input id="edicao" type="text" placeholder="(opcional)" />
+          </div>
+          <div class="form-row">
+            <label for="paginas">Páginas</label>
+            <input id="paginas" type="text" placeholder="(opcional)" />
+          </div>
+          <div class="form-row">
+            <label for="tipoDoc">Tipo de documento</label>
+            <input id="tipoDoc" type="text" placeholder="Livro, artigo, tese..." />
+          </div>
+          <div class="form-row">
+            <label for="url">URL</label>
+            <input id="url" type="url" placeholder="(se for online)" />
+          </div>
+          <div class="form-row">
+            <label for="dataAcesso">Data de acesso</label>
+            <input id="dataAcesso" type="date" />
+          </div>
         </form>
       </div>
 
+      <!-- Importar PDF -->
       <div class="card">
         <h2>Importar PDF</h2>
-        <input type="file" id="pdfFileInput" accept=".pdf">
-        <button id="clearImportedBtn" class="btn">Limpar Citações</button>
-        <p class="help-text">Abra o site via servidor (GitHub Pages, Netlify, Vercel ou Live Server). Nunca use file://</p>
+        <input type="file" id="pdfFileInput" accept=".pdf" />
+        <div class="actions-row">
+          <button id="clearImportedBtn" class="btn secondary">Limpar Citações</button>
+        </div>
+        <p class="help-text">
+          Use PDFs com <strong>texto selecionável</strong> e marcações feitas com ferramenta de
+          <em>marca-texto/anotação</em>. Não funciona bem com PDFs só escaneados como imagem.
+        </p>
+        <p class="help-text">
+          Hospede em GitHub Pages, Netlify ou Vercel (nunca abra diretamente com <code>file://</code>).
+        </p>
       </div>
 
+      <!-- Cores e categorias -->
       <div class="card">
         <h2>Cores e categorias</h2>
         <div class="category-maker">
-          <input id="catName" type="text" placeholder="Nome da categoria">
+          <input id="catName" type="text" placeholder="Nome da categoria (ex.: Conceitos centrais)" />
           <select id="catColor">
+            <option value="amarelo">Amarelo</option>
+            <option value="verde">Verde</option>
             <option value="vermelho">Vermelho</option>
             <option value="azul">Azul</option>
-            <option value="verde">Verde</option>
             <option value="roxo">Roxo</option>
             <option value="laranja">Laranja</option>
             <option value="rosa">Rosa</option>
-            <option value="amarelo">Amarelo</option>
+            <option value="ciano">Ciano</option>
+            <option value="cinza">Cinza</option>
           </select>
           <button id="addCategory" class="btn primary">Adicionar</button>
         </div>
         <ul id="categoryList" class="category-list"></ul>
       </div>
 
+      <!-- Texto manual (opcional) -->
       <div class="card">
-        <h2>Texto manual</h2>
-        <textarea id="manualText" rows="10" placeholder="Use marcações como:
-[verde|p=22] texto [/end]
-[vermelho|p=19] texto [/end]"></textarea>
-        <div class="actions">
+        <h2>Texto manual (opcional)</h2>
+        <textarea
+          id="manualText"
+          rows="8"
+          placeholder="Use marcações como:
+[verde|p=22] texto que você copiou do livro [/end]
+[vermelho|p=19] outra citação [/end]"
+        ></textarea>
+        <div class="actions-row">
           <button id="processBtn" class="btn primary">Processar Texto Manual</button>
-          <button id="downloadTxtBtn" class="btn">Baixar .txt</button>
+          <button id="downloadTxtBtn" class="btn secondary">Baixar .txt</button>
         </div>
       </div>
     </section>
@@ -81,37 +137,36 @@
       <div class="card">
         <h2>Citações (ABNT NBR 10520)</h2>
         <div id="outputArea" class="output-area">
-          <p class="placeholder">As citações aparecerão aqui.</p>
+          <p class="placeholder">As citações aparecerão aqui após processar um PDF ou texto manual.</p>
         </div>
       </div>
+
       <div class="card">
         <h2>Referência (ABNT NBR 6023)</h2>
-        <div id="refOutput" class="ref-output"><p class="placeholder">Preencha os dados e processe.</p></div>
+        <div id="refOutput" class="ref-output">
+          <p class="placeholder">Preencha os dados da referência para gerar no padrão ABNT.</p>
+        </div>
       </div>
+
       <div class="card">
         <h2>Exportação .txt</h2>
-        <pre id="txtPreview" class="txt-preview placeholder">Conteúdo exportável aparecerá aqui.</pre>
+        <pre id="txtPreview" class="txt-preview">Conteúdo exportável aparecerá aqui.</pre>
       </div>
     </section>
   </main>
 
   <footer class="app-footer">
-    <p>Ferramenta de fichamento acadêmico • Roxo pastel • ABNT</p>
+    <p>Ferramenta de fichamento acadêmico &middot; Roxo pastel &middot; ABNT</p>
   </footer>
 
-  <!-- PDF.js compacto da CDN -->
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.min.js"></script>
-  <script defer>
-    document.addEventListener("DOMContentLoaded", () => {
-      if (typeof pdfjsLib !== "undefined") {
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.97/pdf.worker.min.js";
-      }
-    });
+  <!-- PDF.js via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   </script>
 
-  <!-- Seu script principal -->
-  <script defer src="script.js"></script>
-
+  <!-- Script principal -->
+  <script src="script.js"></script>
 </body>
 </html>
