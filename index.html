@@ -12,23 +12,21 @@
   <header class="app-header">
     <h1>Fichamento ABNT Automatizado</h1>
     <p class="subtitle">Detecta marcações coloridas · Agrupa por categorias · NBR 10520 & NBR 6023</p>
-    <div id="statusBar" class="status-bar">Aguardando arquivo ou texto…</div>
+    <div id="statusBar" class="status-bar">Aguardando seleção de arquivo…</div>
   </header>
 
   <main class="app-container">
-    <!-- Painel Esquerdo -->
     <section class="panel panel-left">
-      <!-- Dados da referência -->
       <div class="card">
         <h2>Dados da referência</h2>
         <form id="refForm" class="form-grid">
-          <div class="form-row"><label for="sobrenome">Sobrenome</label><input id="sobrenome" type="text" placeholder="kastrup" /></div>
-          <div class="form-row"><label for="nome">Nome completo</label><input id="nome" type="text" placeholder="Virgínia" /></div>
+          <div class="form-row"><label for="sobrenome">Sobrenome</label><input id="sobrenome" type="text" placeholder="Gallo" /></div>
+          <div class="form-row"><label for="nome">Nome completo</label><input id="nome" type="text" placeholder="Silvio" /></div>
           <div class="form-row"><label for="autoresAdicionais">Autores adicionais</label><input id="autoresAdicionais" type="text" placeholder="(opcional)" /></div>
-          <div class="form-row"><label for="titulo">Título</label><input id="titulo" type="text" placeholder="A invenção de si e do mundo" /></div>
-          <div class="form-row"><label for="local">Local</label><input id="local" type="text" placeholder="Belo Horizonte" /></div>
+          <div class="form-row"><label for="titulo">Título</label><input id="titulo" type="text" placeholder="Deleuze & a Educação" /></div>
+          <div class="form-row"><label for="local">Local</label><input id="local" type="text" placeholder="Campinas" /></div>
           <div class="form-row"><label for="editora">Editora</label><input id="editora" type="text" placeholder="Autêntica" /></div>
-          <div class="form-row"><label for="ano">Ano</label><input id="ano" type="number" placeholder="2007" /></div>
+          <div class="form-row"><label for="ano">Ano</label><input id="ano" type="number" placeholder="2003" /></div>
           <div class="form-row"><label for="edicao">Edição</label><input id="edicao" type="text" placeholder="(opcional)" /></div>
           <div class="form-row"><label for="paginas">Páginas</label><input id="paginas" type="text" placeholder="(opcional)" /></div>
           <div class="form-row"><label for="tipoDoc">Tipo de documento</label><input id="tipoDoc" type="text" placeholder="Livro, artigo, tese..." /></div>
@@ -37,19 +35,21 @@
         </form>
       </div>
 
-      <!-- Importar PDF -->
       <div class="card">
         <h2>Importar PDF</h2>
-        <input type="file" id="pdfFileInput" accept="application/pdf" />
+        <input type="file" id="pdfFileInput" accept="application/pdf" style="display: none;" />
         <div class="actions-row">
+          <button id="selectFileBtn" class="btn secondary" type="button">Escolher Arquivo PDF</button>
+          
+          <button id="processPdfBtn" class="btn primary" type="button" disabled>Analisar Destaques</button>
+          
           <button id="clearImportedBtn" class="btn secondary" type="button">Limpar Citações</button>
         </div>
         <p class="help-text">
-          Funciona com PDFs com texto selecionável e também com PDFs escaneados via OCR (pode ser mais lento).
+          Selecione o arquivo e clique em "Analisar Destaques". **Acompanhe o progresso na barra de status acima.**
         </p>
       </div>
 
-      <!-- Cores e categorias -->
       <div class="card">
         <h2>Cores e categorias</h2>
         <div class="category-maker">
@@ -70,7 +70,6 @@
         <ul id="categoryList" class="category-list"></ul>
       </div>
 
-      <!-- Texto manual (opcional) -->
       <div class="card">
         <h2>Texto manual (opcional)</h2>
         <textarea id="manualText" rows="8" placeholder="[verde|p=22] citação [/end]"></textarea>
@@ -81,7 +80,6 @@
       </div>
     </section>
 
-    <!-- Painel Direito -->
     <section class="panel panel-right">
       <div class="card">
         <h2>Citações (ABNT NBR 10520)</h2>
@@ -108,7 +106,6 @@
     <p>Ferramenta de fichamento acadêmico · ABNT</p>
   </footer>
 
-  <!-- PDF.js via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     if (window.pdfjsLib) {
@@ -117,10 +114,8 @@
     }
   </script>
 
-  <!-- Tesseract.js via CDN (OCR) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-  <!-- Script principal -->
   <script src="script.js"></script>
 </body>
 </html>
