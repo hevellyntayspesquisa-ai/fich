@@ -1,5 +1,5 @@
 // ======================================
-//  FICHAMENTO ABNT – SCRIPT PRINCIPAL (FINAL E COMPLETO)
+//  FICHAMENTO ABNT – SCRIPT PRINCIPAL (FINAL COM MAIOR COMPATIBILIDADE)
 // ======================================
 
 // Elementos
@@ -124,7 +124,7 @@ downloadTxtBtn?.addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'fichamento_abnt.txt';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  document.body.appendChild(a); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   status('Fichamento exportado para TXT.', false);
 });
@@ -180,7 +180,7 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
 
     // 1. OCR se não houver texto nativo (para PDFs escaneados)
     if (!textoPaginaNativo || textoPaginaNativo.length < 50) { 
-      await new Promise(resolve => setTimeout(resolve, 100)); // Pequena pausa para UI
+      await new Promise(resolve => setTimeout(resolve, 100));
       status(`[${progresso}%] Página ${pageNum}: sem texto nativo. Tentando OCR...`, true);
       const textoOCR = await extrairTextoComOCR(page);
       
@@ -192,18 +192,16 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       continue; 
     }
 
-    // 2. Processa destaques digitais (Onde seu trecho parou)
+    // 2. Processa destaques digitais (agora com FreeText e Square)
     for (const ann of (annotations || [])) {
       const subtype = ann.subtype || ann.annotationType;
       
+      // >>> CORREÇÃO PARA INCLUIR OUTRAS MARCAÇÕES <<<
       const isHighlight = 
-        ['Highlight', 'Underline', 'Squiggly', 'StrikeOut'].includes(subtype) || 
-        [9, 10, 11, 12].includes(subtype);
+        ['Highlight', 'Underline', 'Squiggly', 'StrikeOut', 'FreeText', 'Square', 'Circle'].includes(subtype) || 
+        [9, 10, 11, 12, 4, 6].includes(subtype); // 4=FreeText, 6=Square/Circle
 
       if (!isHighlight) continue;
-
-      // DEBUG: Para identificar anotações encontradas
-      // console.log(`[DEBUG - Pág ${pageNum}] Anotação Encontrada. Subtipo: ${subtype}. Cor: ${ann.color ? ann.color.join(',') : 'N/A'}`, ann);
 
       const caixas = getHighlightBoxes(ann);
       if (!caixas.length) continue;
@@ -218,10 +216,10 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
         }
       }
 
-      // MUDANÇA CRÍTICA: Junta as partes sem espaço para tratar quebras de linha e hífens corretamente.
+      // Junta as partes sem espaço (melhor para tratar hífens/quebras de linha)
       let textoDestacado = partes.join('').replace(/\s+/g, ' ').trim();
       
-      // Tenta usar o conteúdo da anotação como fallback
+      // Tenta usar o conteúdo da anotação (útil para FreeText)
       if (!textoDestacado && ann.contents) {
         textoDestacado = String(ann.contents).replace(/\s+/g, ' ').trim();
       }
@@ -231,9 +229,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
           continue; 
       }
       
-      // DEBUG: Para identificar texto extraído com sucesso
-      // console.log(`[DEBUG - Pág ${pageNum}] Texto extraído com sucesso: "${textoDestacado}" (Cor: ${corNome})`);
-
       adicionarCitacao(citacoesPorCor, corNome, { pagina: pageNum, texto: textoDestacado });
     }
   }
@@ -243,12 +238,11 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
   status('Processamento concluído.', false);
 }
 
-// --- Funções Auxiliares (Faltando no trecho original) ---
+// --- Funções Auxiliares ---
 
 // OCR: Usa Tesseract.js
 async function extrairTextoComOCR(page) {
   try {
-    // Escala para melhor qualidade de OCR
     const viewport = page.getViewport({ scale: 2 });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -263,7 +257,6 @@ async function extrairTextoComOCR(page) {
     
     const texto = (text || '').replace(/\s+/g, ' ').trim();
     
-    // Ignora se a confiança for baixa e o texto for muito curto
     if (confidence < 50 && texto.length < 50) return '';
     
     return texto;
@@ -294,7 +287,14 @@ function mapTextItems(textContent) {
 function getHighlightBoxes(annotation) {
   const boxes = [];
   const quads = annotation.quadPoints || annotation.quadrilaterals;
-  if (!quads || !quads.length) return boxes;
+  if (!quads || !quads.length) {
+    // Para anotações FreeText e Square, bbox pode ser usado como fallback
+    const rect = annotation.rect; 
+    if (rect && rect.length === 4) {
+      boxes.push({ minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] });
+    }
+    return boxes;
+  }
 
   for (let i = 0; i < quads.length; i += 8) {
     const xs = [quads[i], quads[i + 2], quads[i + 4], quads[i + 6]];
@@ -379,7 +379,6 @@ function montarCitacaoABNT(trecho, pagina, ref) {
   const autor = ref.sobrenome || 'AUTOR'; 
   const ano   = ref.ano || 's.d.';
   const p     = pagina ? `, p. ${pagina}` : '';
-  // Formato: Texto destacado (SOBRENOME, ANO, p. X).
   return `${trecho} (${autor}, ${ano}${p}).`;
 }
 
