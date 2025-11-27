@@ -14,8 +14,6 @@ const catColorSelect  = document.getElementById('catColor');
 const addCategoryBtn  = document.getElementById('addCategory');
 const categoryList    = document.getElementById('categoryList');
 
-const manualText      = document.getElementById('manualText');
-const processBtn      = document.getElementById('processBtn');
 const downloadTxtBtn  = document.getElementById('downloadTxtBtn');
 
 // =========================
@@ -41,7 +39,7 @@ function getRefData() {
 // ===========================
 // Tabela cor → categoria
 // ===========================
-const categoriasPorCor = {};
+const categoriasPorCor = {}; // ex.: { verde: 'conceitos importantes' }
 
 addCategoryBtn.addEventListener('click', () => {
   const nome = catNameInput.value.trim();
@@ -78,7 +76,7 @@ function renderCategoryList() {
 }
 
 // ============================
-// Utilitários
+// Utilitários de status & txt
 // ============================
 let ultimoTxtExportavel = '';
 
@@ -105,26 +103,13 @@ pdfFileInput.addEventListener('change', handlePdfSelect);
 
 clearImportedBtn.addEventListener('click', () => {
   outputArea.innerHTML = `<p class="placeholder">Citações limpas. Selecione um PDF novamente.</p>`;
-  refOutput.innerHTML  = `<p class="placeholder">Preencha os dados da referência para gerar no padrão ABNT.</p>`;
+  refOutput.innerHTML  = `<p class="placeholder">Preencha os dados para gerar no padrão ABNT.</p>`;
   txtPreview.textContent = 'Conteúdo exportável aparecerá aqui.';
   ultimoTxtExportavel = '';
   status('Citações limpas.');
 });
 
-// PROCESSAR TEXTO MANUAL
-processBtn.addEventListener('click', () => {
-  const texto = manualText.value;
-  if (!texto.trim()) {
-    status('Cole algum texto no campo “Texto manual”.');
-    return;
-  }
-  const ref = getRefData();
-  const citacoesPorCor = extrairCitacoesDeTextoManual(texto);
-  renderResultado(citacoesPorCor, ref);
-  status('Texto manual processado.');
-});
-
-// DOWNLOAD .TXT
+// Download do .txt
 downloadTxtBtn.addEventListener('click', () => {
   if (!ultimoTxtExportavel.trim()) {
     status('Não há conteúdo para exportar.');
@@ -168,11 +153,14 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
 
-  status(`PDF carregado (${pdf.numPages} páginas). Extraindo destaques…`);
+  status(`PDF carregado: ${pdf.numPages} páginas. Processando destaques…`);
 
   const citacoesPorCor = {};
+  const totalPaginas = pdf.numPages;
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+  for (let pageNum = 1; pageNum <= totalPaginas; pageNum++) {
+    status(`Processando página ${pageNum} de ${totalPaginas}…`);
+
     const page = await pdf.getPage(pageNum);
 
     const [textContent, annotations] = await Promise.all([
@@ -187,10 +175,14 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       if (!subtype) continue;
 
       const isHighlight =
-        subtype === 'Highlight' || subtype === 9 ||
-        subtype === 'Underline' || subtype === 10 ||
-        subtype === 'Squiggly'  || subtype === 11 ||
-        subtype === 'StrikeOut' || subtype === 12;
+        subtype === 'Highlight' ||
+        subtype === 9 ||
+        subtype === 'Underline' ||
+        subtype === 10 ||
+        subtype === 'Squiggly' ||
+        subtype === 11 ||
+        subtype === 'StrikeOut' ||
+        subtype === 12;
 
       if (!isHighlight) continue;
 
@@ -209,6 +201,7 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
 
       let textoDestacado = partes.join(' ').replace(/\s+/g, ' ').trim();
 
+      // fallback: se não achou nada via posição, tenta usar o contents
       if (!textoDestacado && ann.contents) {
         textoDestacado = String(ann.contents).replace(/\s+/g, ' ').trim();
       }
@@ -224,10 +217,10 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
 
   const ref = getRefData();
   renderResultado(citacoesPorCor, ref);
-  status('Destaques extraídos!');
+  status('Processamento concluído.');
 }
 
-// TEXTOS DO PDF
+// Converte itens de texto em {str, x, y}
 function mapTextItems(textContent) {
   return textContent.items.map(it => {
     const transform = it.transform || it.textMatrix || [1, 0, 0, 1, 0, 0];
@@ -237,14 +230,15 @@ function mapTextItems(textContent) {
   });
 }
 
+// Pega caixas (bounding boxes) dos quadPoints do highlight
 function getHighlightBoxes(annotation) {
   const boxes = [];
   const quads = annotation.quadPoints || annotation.quadrilaterals;
   if (!quads || !quads.length) return boxes;
 
   for (let i = 0; i < quads.length; i += 8) {
-    const xs = [quads[i], quads[i+2], quads[i+4], quads[i+6]];
-    const ys = [quads[i+1], quads[i+3], quads[i+5], quads[i+7]];
+    const xs = [quads[i], quads[i + 2], quads[i + 4], quads[i + 6]];
+    const ys = [quads[i + 1], quads[i + 3], quads[i + 5], quads[i + 7]];
     boxes.push({
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
@@ -265,24 +259,12 @@ function pontoDentroDaCaixa(x, y, caixa) {
 }
 
 // =============================
-// 2) TEXTO MANUAL COM CORES
+// 2) Texto manual (REMOVIDO)
 // =============================
-function extrairCitacoesDeTextoManual(texto) {
-  const mapa = {};
-  const regex = /\[([a-zA-Z]+)\|p=(\d+)\]([\s\S]*?)\[\/end\]/g;
-  let m;
-  while ((m = regex.exec(texto)) !== null) {
-    const cor    = m[1].toLowerCase();
-    const pagina = parseInt(m[2], 10);
-    const trecho = m[3].replace(/\s+/g, ' ').trim();
-    if (!trecho) continue;
-    adicionarCitacao(mapa, cor, { pagina, texto: trecho });
-  }
-  return mapa;
-}
+// Nada aqui – você não tem mais campo de texto manual.
 
 // ===============================
-// 3) ORGANIZAÇÃO E FORMATAÇÃO ABNT
+// 3) Organização e formatação ABNT
 // ===============================
 function adicionarCitacao(mapa, cor, cit) {
   if (!mapa[cor]) mapa[cor] = [];
@@ -293,8 +275,104 @@ function mapRgbToCorNome(rgb) {
   if (!rgb || rgb.length < 3) return 'amarelo';
 
   let [r, g, b] = rgb;
-  if (r > 1 || g > 1 || b > 1) { r/=255; g/=255; b/=255; }
+  if (r > 1 || g > 1 || b > 1) {
+    r /= 255; g /= 255; b /= 255;
+  }
 
-  if (r > .8 && g > .8 && b < .4) return 'amarelo';
-  if (r > .8 && g < .4 && b < .4) return 'vermelho';
-  if (g > .6 && r < .4 && b < .4) return 'verde';
+  if (r > 0.8 && g > 0.8 && b < 0.4) return 'amarelo';
+  if (r > 0.8 && g < 0.4 && b < 0.4) return 'vermelho';
+  if (g > 0.6 && r < 0.4 && b < 0.4) return 'verde';
+  if (b > 0.6 && r < 0.4 && g < 0.4) return 'azul';
+  if (r > 0.6 && b > 0.6 && g < 0.4) return 'roxo';
+  if (r > 0.9 && g > 0.5 && b > 0.7) return 'rosa';
+  if (r > 0.9 && g > 0.6 && b < 0.3) return 'laranja';
+
+  return 'amarelo';
+}
+
+function montarCitacaoABNT(trecho, pagina, ref) {
+  const autor = ref.sobrenome ? ref.sobrenome : 'autor';
+  const ano   = ref.ano || 's.d.';
+  const p     = pagina ? `, p. ${pagina}` : '';
+  return `${trecho} (${autor}, ${ano}${p}).`;
+}
+
+function montarReferenciaABNT(ref) {
+  if (!ref.sobrenome && !ref.titulo) {
+    return 'Preencha pelo menos sobrenome e título para gerar a referência.';
+  }
+
+  const partes = [];
+
+  if (ref.sobrenome) {
+    const nomeComp = ref.nome ? `${ref.sobrenome}, ${ref.nome}` : ref.sobrenome;
+    partes.push(nomeComp);
+  }
+
+  if (ref.titulo) {
+    partes.push(`${ref.titulo}.`);
+  }
+
+  const localEditoraAno = [];
+  if (ref.local)   localEditoraAno.push(ref.local);
+  if (ref.editora) localEditoraAno.push(ref.editora);
+  if (ref.ano)     localEditoraAno.push(ref.ano);
+
+  if (localEditoraAno.length) {
+    partes.push(localEditoraAno.join(': ') + '.');
+  }
+
+  if (ref.url) {
+    partes.push(ref.url);
+  }
+  if (ref.dataAcesso) {
+    partes.push(`Acesso em: ${ref.dataAcesso}.`);
+  }
+
+  return partes.join(' ');
+}
+
+// Renderiza resultado na interface e monta o .txt
+function renderResultado(citacoesPorCor, ref) {
+  const ordemCores = ['vermelho', 'azul', 'verde', 'roxo', 'laranja', 'rosa', 'amarelo'];
+
+  let htmlSaida = '';
+  let linhasTxt = [];
+
+  ordemCores.forEach(cor => {
+    const lista = citacoesPorCor[cor];
+    if (!lista || !lista.length) return;
+
+    const nomeCategoria = categoriasPorCor[cor] || cor;
+
+    htmlSaida += `<h3>${nomeCategoria} – ${cor}</h3>`;
+    linhasTxt.push(`${nomeCategoria} – ${cor}`);
+
+    lista.forEach(cit => {
+      const citacao = montarCitacaoABNT(cit.texto, cit.pagina, ref);
+      htmlSaida += `<p>${citacao}</p>`;
+      linhasTxt.push(citacao);
+      linhasTxt.push('');
+    });
+
+    htmlSaida += '<hr />';
+    linhasTxt.push('');
+  });
+
+  if (!htmlSaida) {
+    htmlSaida = '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF possui texto selecionável e destaques (não pode ser só imagem escaneada).</p>';
+    linhasTxt = ['Nenhuma citação encontrada.'];
+  }
+
+  outputArea.innerHTML = htmlSaida;
+
+  const referenciaFinal = montarReferenciaABNT(ref);
+  refOutput.textContent = referenciaFinal;
+
+  linhasTxt.push('');
+  linhasTxt.push('Referência:');
+  linhasTxt.push(referenciaFinal);
+
+  ultimoTxtExportavel = linhasTxt.join('\n');
+  txtPreview.textContent = ultimoTxtExportavel;
+}
