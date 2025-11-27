@@ -1,5 +1,5 @@
 // ======================================
-//  FICHAMENTO ABNT – SCRIPT PRINCIPAL
+//  FICHAMENTO ABNT – SCRIPT PRINCIPAL (CORRIGIDO)
 // ======================================
 
 // Elementos
@@ -110,7 +110,8 @@ if (downloadTxtBtn) {
 // Dados da referência
 function getRefData() {
   return {
-    sobrenome: (document.getElementById('sobrenome')?.value || '').trim().toLowerCase(),
+    // CORREÇÃO: Não converter para minúsculas aqui. A capitalização será feita nas funções ABNT.
+    sobrenome: (document.getElementById('sobrenome')?.value || '').trim(),
     nome: (document.getElementById('nome')?.value || '').trim(),
     autoresAdicionais: (document.getElementById('autoresAdicionais')?.value || '').trim(),
     titulo: (document.getElementById('titulo')?.value || '').trim(),
@@ -142,18 +143,16 @@ async function handlePdfSelect(e) {
   }
 }
 
+// OTIMIZAÇÃO DE DESEMPENHO: Processamento paralelo de páginas
 async function extrairDestaquesDoPdf(arrayBuffer) {
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
 
-  status(`PDF carregado: ${pdf.numPages} páginas. Processando…`);
-  const citacoesPorCor = {};
+  status(`PDF carregado: ${pdf.numPages} páginas. Processando em paralelo…`);
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    status(`Processando página ${pageNum} de ${pdf.numPages}…`);
+  const processarPagina = async (pageNum) => {
     const page = await pdf.getPage(pageNum);
 
-    // Tenta extrair texto “nativo”
     const [textContent, annotations] = await Promise.all([
       page.getTextContent().catch(() => ({ items: [] })),
       page.getAnnotations({ intent: 'display' }).catch(() => []),
@@ -162,17 +161,20 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
     const itensTexto = mapTextItems(textContent);
     let textoPaginaNativo = (textContent.items || []).map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
 
-    // Se não houver texto, usa OCR
+    const citacoesPagina = {};
+
+    // 1. Se não houver texto, usa OCR
     if (!textoPaginaNativo) {
+      status(`[OCR] Página ${pageNum}: tentando extrair texto...`);
       const textoOCR = await extrairTextoComOCR(page);
       if (textoOCR) {
         // Para PDFs escaneados sem anotações digitais, categorizamos em "cinza" com página
-        adicionarCitacao(citacoesPorCor, 'cinza', { pagina: pageNum, texto: textoOCR });
-        continue; // vai para próxima página
+        adicionarCitacao(citacoesPagina, 'cinza', { pagina: pageNum, texto: textoOCR });
+        return citacoesPagina;
       }
     }
 
-    // Se houver anotações de destaque, extrai por caixas
+    // 2. Extrai anotações de destaque
     for (const ann of (annotations || [])) {
       const subtype = ann.subtype || ann.annotationType;
       if (!subtype) continue;
@@ -181,7 +183,7 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
         subtype === 'Highlight' || subtype === 9 ||
         subtype === 'Underline' || subtype === 10 ||
         subtype === 'Squiggly' || subtype === 11 ||
-        subtype === 'StrikeOut' || subtype === 12;
+        subtype === 'StrikeOut' || subtype || 12;
 
       if (!isHighlight) continue;
 
@@ -203,10 +205,28 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       }
       if (!textoDestacado) continue;
 
-      adicionarCitacao(citacoesPorCor, corNome, { pagina: pageNum, texto: textoDestacado });
+      adicionarCitacao(citacoesPagina, corNome, { pagina: pageNum, texto: textoDestacado });
     }
+    return citacoesPagina;
+  };
+
+  const pagePromises = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    pagePromises.push(processarPagina(i));
   }
 
+  // Espera por todas as páginas em paralelo
+  const resultadosPaginas = await Promise.all(pagePromises);
+  
+  // Agrupa os resultados
+  const citacoesPorCor = resultadosPaginas.reduce((acc, current) => {
+    for (const cor in current) {
+      if (!acc[cor]) acc[cor] = [];
+      acc[cor].push(...current[cor]);
+    }
+    return acc;
+  }, {});
+  
   const ref = getRefData();
   renderResultado(citacoesPorCor, ref);
   status('Processamento concluído.');
@@ -274,15 +294,8 @@ function textoDentroDaCaixa(item, caixa) {
 // Texto manual com cores
 function extrairCitacoesDeTextoManual(texto) {
   const mapa = {};
-  const regex = /
-
-\[([a-zA-ZáéíóúãõâêôçÇ]+)\|p=(\d+)\]
-
-([\s\S]*?)
-
-\[\/end\]
-
-/g;
+  // CORREÇÃO: Regex mais robusta para lidar com espaços e quebras de linha nas tags.
+  const regex = /\[\s*([a-zA-ZáéíóúãõâêôçÇ]+)\s*\|\s*p\s*=\s*(\d+)\s*\]([\s\S]*?)\[\s*\/end\s*\]/g;
   let m;
   while ((m = regex.exec(texto)) !== null) {
     const cor = m[1].toLowerCase();
@@ -350,9 +363,12 @@ function mapRgbToCorNome(rgb) {
 
 // ABNT
 function montarCitacaoABNT(trecho, pagina, ref) {
-  const autor = ref.sobrenome || 'autor';
+  // CORREÇÃO ABNT NBR 10520: Sobrenome em CAIXA ALTA para citação em parênteses.
+  const autor = ref.sobrenome.toUpperCase() || 'AUTOR';
   const ano   = ref.ano || 's.d.';
   const p     = pagina ? `, p. ${pagina}` : '';
+  
+  // O ponto final deve ser sempre colocado DEPOIS do parênteses da citação no padrão ABNT
   return `${trecho} (${autor}, ${ano}${p}).`;
 }
 
@@ -361,19 +377,50 @@ function montarReferenciaABNT(ref) {
     return 'Preencha pelo menos sobrenome e título para gerar a referência.';
   }
   const partes = [];
+  
+  // Sobrenome do primeiro autor em CAIXA ALTA
   if (ref.sobrenome) {
-    const nomeComp = ref.nome ? `${ref.sobrenome}, ${ref.nome}` : ref.sobrenome;
+    const nomeComp = ref.nome ? `${ref.sobrenome.toUpperCase()}, ${ref.nome}` : ref.sobrenome.toUpperCase();
     partes.push(nomeComp);
   }
-  if (ref.titulo) partes.push(`${ref.titulo}.`);
+  
+  // Título em NEGRITO (NBR 6023)
+  if (ref.titulo) partes.push(`<b>${ref.titulo}.</b>`);
 
-  const localEditoraAno = [];
-  if (ref.local) localEditoraAno.push(ref.local);
-  if (ref.editora) localEditoraAno.push(ref.editora);
-  if (ref.ano) localEditoraAno.push(ref.ano);
-  if (localEditoraAno.length) partes.push(localEditoraAno.join(': ') + '.');
+  const localEditoraAnoEdicao = [];
 
-  if (ref.url) partes.push(ref.url);
+  // Edição
+  if (ref.edicao) localEditoraAnoEdicao.push(`${ref.edicao}. ed.`);
+
+  // Local: Editora, Ano.
+  if (ref.local) localEditoraAnoEdicao.push(ref.local);
+  if (ref.editora) localEditoraAnoEdicao.push(ref.editora);
+  if (ref.ano) localEditoraAnoEdicao.push(ref.ano);
+  
+  if (localEditoraAnoEdicao.length) {
+    let output = '';
+    
+    if (ref.edicao) {
+        output += localEditoraAnoEdicao.shift() + ' ';
+    }
+    
+    const local = localEditoraAnoEdicao.shift();
+    const editora = localEditoraAnoEdicao.shift();
+    const ano = localEditoraAnoEdicao.shift();
+    
+    if (local) output += local;
+    if (editora) output += ': ' + editora;
+    if (ano) output += ', ' + ano;
+    output += '.';
+    partes.push(output.trim());
+  }
+
+  // Complementos
+  if (ref.paginas) partes.push(`${ref.paginas} p.`);
+  if (ref.tipoDoc) partes.push(`(${ref.tipoDoc}).`);
+
+  // URL e Acesso
+  if (ref.url) partes.push(`Disponível em: ${ref.url}.`);
   if (ref.dataAcesso) partes.push(`Acesso em: ${ref.dataAcesso}.`);
 
   return partes.join(' ');
@@ -385,39 +432,53 @@ function renderResultado(citacoesPorCor, ref) {
   let htmlSaida = '';
   let linhasTxt = [];
 
+  // Gera a referência ABNT no início do arquivo TXT
+  const referenciaFinal = montarReferenciaABNT(ref);
+  refOutput.innerHTML = referenciaFinal; // Usa innerHTML para renderizar o negrito (<b>)
+
+  // Formatação do TXT
+  linhasTxt.push('==================================================');
+  linhasTxt.push('REFERÊNCIA (ABNT NBR 6023):');
+  linhasTxt.push('==================================================');
+  linhasTxt.push(referenciaFinal.replace(/<\/?b>/g, '')); // Remove tags <b> para o TXT
+  linhasTxt.push('\n\n');
+  linhasTxt.push('==================================================');
+  linhasTxt.push('CITAÇÕES AGRUPADAS (ABNT NBR 10520):');
+  linhasTxt.push('==================================================');
+  linhasTxt.push('');
+
+
   ordemCores.forEach((cor) => {
     const lista = citacoesPorCor[cor];
     if (!lista || !lista.length) return;
 
     const nomeCategoria = categoriasPorCor[cor] || cor;
     htmlSaida += `<h3>${nomeCategoria} – ${cor}</h3>`;
-    linhasTxt.push(`${nomeCategoria} – ${cor}`);
+    linhasTxt.push(`>>>>> ${nomeCategoria.toUpperCase()} (${cor.toUpperCase()}) <<<<<`);
+    linhasTxt.push('');
 
     lista.forEach((cit) => {
       const citacao = montarCitacaoABNT(cit.texto, cit.pagina, ref);
       htmlSaida += `<p>${citacao}</p>`;
-      linhasTxt.push(citacao);
+      
+      // Saída mais detalhada e separada para o TXT
+      linhasTxt.push(`P. ${cit.pagina}:`);
+      linhasTxt.push(`  - Trecho: "${cit.texto.trim()}"`);
+      linhasTxt.push(`  - Citação ABNT: ${montarCitacaoABNT(cit.texto, cit.pagina, ref)}`);
       linhasTxt.push('');
     });
 
     htmlSaida += '<hr />';
-    linhasTxt.push('');
+    linhasTxt.push('--------------------------------------------------');
   });
 
   if (!htmlSaida) {
     htmlSaida = '<p class="placeholder">Nenhuma citação destacada foi encontrada. Se o PDF for escaneado, o OCR tentará extrair o texto, mas pode variar conforme a qualidade.</p>';
-    linhasTxt = ['Nenhuma citação encontrada.'];
+    linhasTxt.push('Nenhuma citação encontrada.');
   }
 
   outputArea.innerHTML = htmlSaida;
-
-  const referenciaFinal = montarReferenciaABNT(ref);
-  refOutput.textContent = referenciaFinal;
-
-  linhasTxt.push('');
-  linhasTxt.push('Referência:');
-  linhasTxt.push(referenciaFinal);
-
+  
   ultimoTxtExportavel = linhasTxt.join('\n');
   txtPreview.textContent = ultimoTxtExportavel;
 }
