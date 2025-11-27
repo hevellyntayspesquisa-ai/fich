@@ -1,5 +1,5 @@
 // ======================================
-//  FICHAMENTO ABNT – SCRIPT PRINCIPAL (COM DEBUG E OTMIZAÇÃO)
+//  FICHAMENTO ABNT – SCRIPT PRINCIPAL (FINAL E OTIMIZADO)
 // ======================================
 
 // Elementos
@@ -204,7 +204,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
       const textoOCR = await extrairTextoComOCR(page);
       
       if (textoOCR && textoOCR.length > 50) { 
-        // Adiciona o texto do OCR na cor cinza
         adicionarCitacao(citacoesPorCor, 'cinza', { pagina: pageNum, texto: textoOCR });
       } else {
          console.warn(`OCR não retornou texto útil na página ${pageNum}.`);
@@ -216,9 +215,6 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
     for (const ann of (annotations || [])) {
       const subtype = ann.subtype || ann.annotationType;
       
-      // >>> CÓDIGO DE DEBUG AQUI <<<
-      console.log(`[DEBUG - Pág ${pageNum}] Anotação Encontrada. Subtipo: ${subtype}. Cor RGB: ${ann.color ? ann.color.join(',') : 'N/A'}`, ann);
-
       const isHighlight =
         subtype === 'Highlight' || subtype === 9 ||
         subtype === 'Underline' || subtype === 10 ||
@@ -234,26 +230,23 @@ async function extrairDestaquesDoPdf(arrayBuffer) {
 
       const partes = [];
       for (const item of itensTexto) {
+        // CORRIGIDO: Usa join('') para melhor extração de texto em múltiplas caixas/linhas
         if (caixas.some((caixa) => textoDentroDaCaixa(item, caixa))) {
           partes.push(item.str);
         }
       }
 
-      // MUDANÇA: Usa join('') para lidar melhor com quebras de linha e hífens.
       let textoDestacado = partes.join('').replace(/\s+/g, ' ').trim();
       
-      // Tenta usar o conteúdo da anotação como fallback se o texto geométrico falhar
+      // Fallback para conteúdo da anotação
       if (!textoDestacado && ann.contents) {
         textoDestacado = String(ann.contents).replace(/\s+/g, ' ').trim();
       }
 
       if (!textoDestacado) {
-          console.warn(`Anotação na página ${pageNum} ignorada: Não foi possível extrair o texto destacado. (DEBUG: Subtipo ${subtype}, Cor: ${corNome})`);
+          console.warn(`Anotação na página ${pageNum} ignorada: Não foi possível extrair o texto destacado.`);
           continue; 
       }
-      
-      // >>> CÓDIGO DE DEBUG AQUI <<<
-      console.log(`[DEBUG - Pág ${pageNum}] Texto extraído com sucesso: "${textoDestacado}" (Cor: ${corNome})`);
 
       adicionarCitacao(citacoesPorCor, corNome, { pagina: pageNum, texto: textoDestacado });
     }
@@ -348,7 +341,7 @@ function adicionarCitacao(mapa, cor, cit) {
   mapa[cor].push(cit);
 }
 
-// RGB → HSV e mapeamento de cores (lógica para identificar cor do highlight)
+// RGB → HSV e mapeamento de cores
 function rgbToHsv(r, g, b) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
@@ -490,7 +483,7 @@ function renderResultado(citacoesPorCor, ref) {
   });
 
   if (!citacoesEncontradas) {
-    htmlSaida = '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique o **Console (F12)** para ver as mensagens de DEBUG e erro.</p>';
+    htmlSaida = '<p class="placeholder">Nenhuma citação destacada foi encontrada. Verifique se o PDF está marcado corretamente com a ferramenta de Marca-Texto e não está "achatado".</p>';
   }
 
   outputArea.innerHTML = htmlSaida;
